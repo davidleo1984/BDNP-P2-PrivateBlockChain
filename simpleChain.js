@@ -1,6 +1,7 @@
 const SHA256 = require('crypto-js/sha256');
 const level = require('level');
 
+
 class Block {
   constructor(data) {
     (this.hash = ''),
@@ -15,20 +16,12 @@ class Block {
 class Blockchain {
   constructor() {
     this.database = level('./mydb', { Encoding: JSON });
+    this.database.put('chainHeight', -1, function (err) { if (err) return console.error(err); });
     this.addBlock(new Block("First block in the chain - Genesis block"));
   }
 
-  getBlockHeight() {
-    return new Promise((resolve, reject) => {
-      let i = 0;
-      this.database.createReadStream()
-        .on('data', function (data) {
-          i++;
-        })
-        .on('close', function () {
-          resolve(i - 1);
-        });
-    });
+  async getBlockHeight() {
+    return this.database.get('chainHeight');
   }
 
   getBlock(blockHeight) {
@@ -39,7 +32,8 @@ class Blockchain {
   }
 
   async  addBlock(newBlock) {
-    let chainHeight = await this.getBlockHeight();
+    //read current chainHeight
+    let chainHeight = Number(await this.getBlockHeight());
     // Block height
     newBlock.height = chainHeight + 1;
     // previous block hash
@@ -60,7 +54,12 @@ class Blockchain {
           'Block ' + newBlock.height + ' submission failed',
           err
         );
-      console.log('Block #' + newBlock.height + ' added.');
+      console.log('Block #' + newBlock.height + ' added.');     
+    });
+    // update chainHeight to levelDB
+    this.database.put('chainHeight', newBlock.height, function (err) {
+      if (err)
+        return console.log('failed to updated chainHeight.');
     });
   }
 
@@ -86,16 +85,18 @@ class Blockchain {
 
   // Validate blockchain
   async  validateChain() {
-    let chainHeight = await this.getBlockHeight();
+    let chainHeight = Number(await this.getBlockHeight());
     let errorLog = [];
-    for (var i = 0; i < chainHeight; i++) {
+    for (var i = 0; i <= chainHeight; i++) {
       // validate block
       if (!(await this.validateBlock(i))) errorLog.push(i);
       // compare blocks hash link
-      let blockHash = JSON.parse(await this.database.get(i)).hash;
-      let previousHash = JSON.parse(await this.database.get(i + 1)).previousBlockHash;
-      if (blockHash !== previousHash) {
-        errorLog.push(i);
+      if (i < chainHeight) {
+        let blockHash = JSON.parse(await this.database.get(i)).hash;
+        let previousHash = JSON.parse(await this.database.get(i + 1)).previousBlockHash;
+        if (blockHash !== previousHash) {
+          errorLog.push(i);
+        }
       }
     }
     if (errorLog.length > 0) {
