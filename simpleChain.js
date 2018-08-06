@@ -16,12 +16,20 @@ class Block {
 class Blockchain {
   constructor() {
     this.database = level('./mydb', { Encoding: JSON });
-    this.database.put('chainHeight', -1, function (err) { if (err) return console.error(err); });
-    this.addBlock(new Block("First block in the chain - Genesis block"));
+    this.generateGenesisBlock();
+  }
+
+  async generateGenesisBlock() {
+    try {
+      await getBlockHeight();
+    } catch (err) {
+      await this.database.put('chainHeight', -1);
+      this.addBlock(new Block("First block in the chain - Genesis block"));
+    }
   }
 
   async getBlockHeight() {
-    return this.database.get('chainHeight');
+    return await this.database.get('chainHeight');
   }
 
   getBlock(blockHeight) {
@@ -54,7 +62,7 @@ class Blockchain {
           'Block ' + newBlock.height + ' submission failed',
           err
         );
-      console.log('Block #' + newBlock.height + ' added.');     
+      console.log('Block #' + newBlock.height + ' added.');
     });
     // update chainHeight to levelDB
     this.database.put('chainHeight', newBlock.height, function (err) {
@@ -107,3 +115,5 @@ class Blockchain {
     }
   }
 }
+
+
